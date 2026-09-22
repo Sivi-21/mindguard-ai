@@ -179,26 +179,26 @@ class BertBiLSTM(nn.Module):
 # ============================================
 @st.cache_resource
 def load_bert_bilstm_model():
-    """Load the trained BERT + BiLSTM model"""
-    model_path = "mental_health_bert_bilstm_model"
-    
-    if not os.path.exists(model_path):
-        return None, None, None
-    
+    """Load the trained BERT + BiLSTM model from Hugging Face"""
     try:
+        from huggingface_hub import hf_hub_download
+        REPO_ID = "sivvvsivagami/mindguard-ai-models"
+        
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         
-        le_path = os.path.join(model_path, "label_encoder.pkl")
-        if not os.path.exists(le_path):
-            le_path = "label_encoder_bilstm.pkl"
-        
+        # Download label encoder
+        le_path = hf_hub_download(repo_id=REPO_ID, filename="label_encoder.pkl")
         with open(le_path, "rb") as f:
             label_encoder = pickle.load(f)
         
         num_classes = len(label_encoder.classes_)
         
         model = BertBiLSTM("bert-base-uncased", num_classes=num_classes)
-        model.load_state_dict(torch.load(os.path.join(model_path, "model.pt"), map_location=DEVICE))
+        
+        # Download model weights
+        model_pt_path = hf_hub_download(repo_id=REPO_ID, filename="model.pt")
+        model.load_state_dict(torch.load(model_pt_path, map_location=DEVICE))
+        
         model.eval()
         model.to(DEVICE)
         
@@ -210,7 +210,9 @@ def load_bert_bilstm_model():
 @st.cache_data
 def load_data():
     try:
-        return pd.read_csv('data.csv')
+        from huggingface_hub import hf_hub_download
+        data_path = hf_hub_download(repo_id="sivvvsivagami/mindguard-ai-models", filename="data.csv")
+        return pd.read_csv(data_path)
     except:
         return None
 
