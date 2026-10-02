@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModel
 from textblob import TextBlob
+import firebase_admin
+from firebase_admin import credentials, firestore
+import hashlib
 
 # Optional imports
 try:
@@ -137,7 +140,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================
-# SESSION STATE
+# FIREBASE INIT
+# ============================================
+if not firebase_admin._apps:
+    try:
+        cert = dict(st.secrets["firebase"])
+        cred = credentials.Certificate(cert)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        pass # Handle locally if needed
+db = firestore.client()
+
+# ============================================
+# SESSION STATE & AUTH
 # ============================================
 if 'history' not in st.session_state:
     st.session_state.history = []
@@ -145,6 +160,42 @@ if 'analytics' not in st.session_state:
     st.session_state.analytics = {'Low Risk': 0, 'Moderate Risk': 0, 'High Risk': 0}
 if 'batch_results' not in st.session_state:
     st.session_state.batch_results = None
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
+
+if not st.session_state.user:
+    st.markdown('<div class="hero-header"><h1 class="hero-title">🧠 MindGuard AI</h1><p class="hero-subtitle">Login to access your dashboard</p></div>', unsafe_allow_html=True)
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    with tab1:
+        with st.form("login"):
+            email = st.text_input("Email")
+            pw = st.text_input("Password", type="password")
+            if st.form_submit_button("Login"):
+                doc = db.collection('users').document(email.lower()).get()
+                if doc.exists and doc.to_dict().get('password') == hash_pw(pw):
+                    st.session_state.user = email.lower()
+                    
+                    # Fetch history
+                    docs = db.collection('users').document(email.lower()).collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
+                    st.session_state.history = [d.to_dict() for d in docs]
+                    st.rerun()
+                else:
+                    st.error("Invalid email or password")
+    with tab2:
+        with st.form("signup"):
+            new_email = st.text_input("Email")
+            new_pw = st.text_input("Password", type="password")
+            if st.form_submit_button("Sign Up"):
+                ref = db.collection('users').document(new_email.lower())
+                if ref.get().exists:
+                    st.error("Account exists!")
+                else:
+                    ref.set({'password': hash_pw(new_pw)})
+                    st.success("Account created! Please log in.")
+    st.stop()
+
 
 # ============================================
 # DEVICE
@@ -534,6 +585,12 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.markdown("---")
+    st.markdown(f"**👤 Logged in as:** {st.session_state.user}")
+    if st.button("🚪 Logout"):
+        st.session_state.user = None
+        st.session_state.history = []
+        st.rerun()
+    st.markdown("---")
     st.markdown("### 🧭 Navigation")
     page = st.radio(
         "Navigate:",
@@ -688,12 +745,18 @@ if page == "🏠 Home":
                         
                         st.info(f"📍 {result.get('source', 'BERT+BiLSTM Model')}")
                         
-                        st.session_state.history.append({
+                        item = {
                             'text': text_input,
                             'risk': result['risk'],
                             'confidence': result['confidence'],
-                            'time': pd.Timestamp.now().strftime('%H:%M:%S')
-                        })
+                            'time': pd.Timestamp.now().strftime('%H:%M:%S'),
+                            'timestamp': firestore.SERVER_TIMESTAMP
+                        }
+                        st.session_state.history.insert(0, item)
+                        try:
+                            db.collection('users').document(st.session_state.user).collection('history').add(item)
+                        except:
+                            pass
                         st.session_state.analytics[result['risk']] += 1
                         
                         if result['confidence'] < threshold:

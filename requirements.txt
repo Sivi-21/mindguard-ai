@@ -11,3 +11,5 @@ textblob>=0.17.0
 gtts>=2.3.0
 pillow>=10.0.0
 huggingface_hub>=0.19.0
+torchvision
+firebase-admin>=6.2.0
