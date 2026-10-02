@@ -383,7 +383,8 @@ def predict_risk(text, model, tokenizer, label_encoder, max_len=128):
         'miserable', 'hopeless', 'worthless', 'useless',
         'failure', 'failed', 'struggling', 'suffering',
         'i hate myself', 'i hate my life', 'hate everything',
-        'lonely', 'emptiness', 'numb'
+        'lonely', 'emptiness', 'numb', 'scary', 'scared',
+        'terrified', 'fear', 'panic', 'afraid', 'creepy'
     ]
     
     matched_moderate = []
@@ -418,13 +419,13 @@ def predict_risk(text, model, tokenizer, label_encoder, max_len=128):
         
         inputs = tokenizer(
             cleaned, return_tensors="pt", truncation=True,
-            padding="max_length", max_length=max_len
+            padding=True, max_length=max_len
         )
         
         input_ids = inputs["input_ids"].to(DEVICE)
         attention_mask = inputs["attention_mask"].to(DEVICE)
         
-        with torch.no_grad():
+        with torch.inference_mode():
             logits = model(input_ids, attention_mask)
             probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
         
@@ -654,6 +655,8 @@ if page == "🏠 Home":
                             'Moderate Risk': '🟡 MODERATE RISK'
                         }
                         
+                        sentiment = get_smart_sentiment(text_input, result)
+                        
                         if result['risk'] == 'High Risk':
                             gradient = "linear-gradient(135deg, #E53E3E 0%, #C53030 100%)"
                             sub_msg = "⚠️ Please reach out to a mental health professional"
@@ -664,7 +667,10 @@ if page == "🏠 Home":
                             text_color = "white"
                         else:
                             gradient = "linear-gradient(135deg, #38A169 0%, #2F855A 100%)"
-                            sub_msg = "✨ Great! Keep up the positive vibes"
+                            if sentiment['score'] < -0.2:
+                                sub_msg = "✅ No personal mental health risk detected."
+                            else:
+                                sub_msg = "✨ Great! Keep up the positive vibes"
                             text_color = "white"
                         
                         st.markdown(f"""
@@ -697,7 +703,6 @@ if page == "🏠 Home":
                         st.markdown('<div class="section-header">📈 Probability Distribution</div>', unsafe_allow_html=True)
                         render_probability_bars(result['probabilities'])
                         
-                        sentiment = get_smart_sentiment(text_input, result)
                         st.markdown(f"""
                         <div class="glass-card" style="border-left: 4px solid {sentiment['color']};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
