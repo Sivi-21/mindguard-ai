@@ -173,27 +173,33 @@ if not st.session_state.user:
             email = st.text_input("Email")
             pw = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
-                doc = db.collection('users').document(email.lower()).get()
-                if doc.exists and doc.to_dict().get('password') == hash_pw(pw):
-                    st.session_state.user = email.lower()
-                    
-                    # Fetch history
-                    docs = db.collection('users').document(email.lower()).collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
-                    st.session_state.history = [d.to_dict() for d in docs]
-                    st.rerun()
+                if not email.strip() or not pw.strip():
+                    st.error("Please enter both email and password")
                 else:
-                    st.error("Invalid email or password")
+                    doc = db.collection('users').document(email.lower()).get()
+                    if doc.exists and doc.to_dict().get('password') == hash_pw(pw):
+                        st.session_state.user = email.lower()
+                        
+                        # Fetch history
+                        docs = db.collection('users').document(email.lower()).collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
+                        st.session_state.history = [d.to_dict() for d in docs]
+                        st.rerun()
+                    else:
+                        st.error("Invalid email or password")
     with tab2:
         with st.form("signup"):
             new_email = st.text_input("Email")
             new_pw = st.text_input("Password", type="password")
             if st.form_submit_button("Sign Up"):
-                ref = db.collection('users').document(new_email.lower())
-                if ref.get().exists:
-                    st.error("Account exists!")
+                if not new_email.strip() or not new_pw.strip():
+                    st.error("Please enter both email and password")
                 else:
-                    ref.set({'password': hash_pw(new_pw)})
-                    st.success("Account created! Please log in.")
+                    ref = db.collection('users').document(new_email.lower())
+                    if ref.get().exists:
+                        st.error("Account exists!")
+                    else:
+                        ref.set({'password': hash_pw(new_pw)})
+                        st.success("Account created! Please log in.")
     st.stop()
 
 
