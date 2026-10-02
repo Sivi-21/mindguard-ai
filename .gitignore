@@ -1,0 +1,62 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# Large Model Files (optional - see note below)
+mental_health_bert_model/
+mental_health_bert_bilstm_model/
+results/
+node_modules/
+models/
+*.h5
+*.pt
+*.safetensors
+*.pkl
+*.joblib
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Backup files
+*.bak
+*_backup.*
+*_OLD.*
+*_old.*
+
+# Test files
+test_model.py
+infer.py
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Temporary
+temp/
+tmp/
