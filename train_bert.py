@@ -190,10 +190,10 @@ def main():
     )
 
     train_loader = DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0
+        val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True
     )
 
     # ============================================
@@ -209,6 +209,9 @@ def main():
 
     optimizer = AdamW(model.parameters(), lr=LR)
     loss_fn = CrossEntropyLoss(weight=class_weights_tensor)
+    
+    # Enable Mixed Precision (AMP) for much faster training
+    scaler = torch.cuda.amp.GradScaler() if DEVICE.type == "cuda" else None
 
     # ============================================
     # 8. Training loop
@@ -231,13 +234,18 @@ def main():
             attention_mask = batch["attention_mask"].to(DEVICE)
             labels = batch["labels"].to(DEVICE)
 
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-            )
-            loss = loss_fn(outputs.logits, labels)
-            loss.backward()
-            optimizer.step()
+            if scaler is not None:
+                with torch.cuda.amp.autocast():
+                    outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                    loss = loss_fn(outputs.logits, labels)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                loss = loss_fn(outputs.logits, labels)
+                loss.backward()
+                optimizer.step()
 
             epoch_loss += loss.item()
 

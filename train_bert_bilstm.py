@@ -158,8 +158,8 @@ tokenizer = AutoTokenizer.from_pretrained(BERT_MODEL)
 train_dataset = MentalHealthDataset(train_df["text"].tolist(), train_df["risk_id"].tolist(), tokenizer, MAX_LEN)
 val_dataset = MentalHealthDataset(val_df["text"].tolist(), val_df["risk_id"].tolist(), tokenizer, MAX_LEN)
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
+val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 
 # ============================================
 # MODEL
@@ -183,6 +183,7 @@ scheduler = get_linear_schedule_with_warmup(
     optimizer, num_warmup_steps=int(total_steps * 0.1), num_training_steps=total_steps
 )
 loss_fn = nn.CrossEntropyLoss(weight=class_weights_tensor)
+scaler = torch.cuda.amp.GradScaler() if DEVICE.type == "cuda" else None
 
 # ============================================
 # TRAIN
@@ -204,11 +205,22 @@ for epoch in range(1, EPOCHS + 1):
         attention_mask = batch["attention_mask"].to(DEVICE)
         labels = batch["labels"].to(DEVICE)
 
-        logits = model(input_ids, attention_mask)
-        loss = loss_fn(logits, labels)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        if scaler is not None:
+            with torch.cuda.amp.autocast():
+                logits = model(input_ids, attention_mask)
+                loss = loss_fn(logits, labels)
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            logits = model(input_ids, attention_mask)
+            loss = loss_fn(logits, labels)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            
         scheduler.step()
 
         total_loss += loss.item()
